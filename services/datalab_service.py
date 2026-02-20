@@ -65,7 +65,7 @@ class DatalabService:
             data.add_field("format_lines", "False")  # Частичный OCR строк для лучшей точности
             data.add_field("paginate", "False")  # Добавление разделителей страниц
             data.add_field("output_format", "markdown")  # Формат вывода: json, markdown, html
-            data.add_field("use_llm", "True")  # Использование LLM для максимальной точности
+            data.add_field("use_llm", "False")  # Использование LLM для максимальной точности
             data.add_field("strip_existing_ocr", "False")  # Не удалять существующий OCR
             data.add_field("disable_image_extraction", "False")  # Отключить извлечение изображений
             data.add_field("keep_page_header_in_output", "False")  # Сохранять заголовки страниц

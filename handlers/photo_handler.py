@@ -16,7 +16,7 @@ from aiogram.types import (
 )
 
 from config import IMAGE_MAX_SIZE, PDF_MAX_SIZE
-from services.datalab_service import DatalabService
+from services.ocr_service import OCRService
 from services.image_generator import ImageGenerator
 from handlers.states import TextConfirmation, BackgroundUpload
 from aiogram.filters import Command
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 router = Router(name="photo_handler")
 
 # Инициализируем сервисы
-datalab_service = DatalabService()
+ocr_service = OCRService()
 image_generator = ImageGenerator()
 
 # Глобальное хранилище фоновых изображений пользователей (user_id -> image_bytes)
@@ -149,10 +149,8 @@ async def process_image(image_bytes: bytes, message: Message, processing_msg: Me
     # Обновляем статус
     await processing_msg.edit_text("🔍 Извлекаю текст из изображения...")
 
-    # Извлекаем текст через Datalab API
-    extracted_text = await datalab_service.extract_text_from_image(
-        image_bytes, filename=f"photo_{message.message_id}.jpg"
-    )
+    # Извлекаем текст через выбранный OCR провайдер
+    extracted_text = await ocr_service.extract_text(image_bytes, filename=f"photo_{message.message_id}.jpg")
 
     if not extracted_text or not extracted_text.strip():
         await processing_msg.edit_text(
@@ -175,6 +173,35 @@ async def cmd_back(message: Message, state: FSMContext) -> None:
         "🖼️ Отправьте изображение, которое будет использоваться как фон для списка продуктов.\n\n"
         "Изображение будет автоматически подогнано под размер текста."
     )
+
+
+@router.message(Command("ocr"))
+async def cmd_ocr(message: Message) -> None:
+    """Переключает OCR провайдер между datalab и paddle."""
+    text = (message.text or "").strip()
+    parts = text.split(maxsplit=1)
+
+    # Показать текущее значение и подсказку
+    if len(parts) == 1:
+        current = ocr_service.provider
+        await message.answer(
+            "⚙️ Текущий OCR провайдер: "
+            f"<b>{current}</b>\n"
+            "Использование: /ocr datalab или /ocr paddle\n"
+            "Примечание: PaddleOCR не обрабатывает PDF напрямую — конвертируйте в изображения."
+        )
+        return
+
+    requested = parts[1].lower()
+    success, info = await ocr_service.set_provider(requested)
+
+    if success:
+        extra = ""
+        if requested == "paddle":
+            extra = "\n⚠️ PaddleOCR не обрабатывает PDF напрямую. Отправляйте изображения."
+        await message.answer(f"✅ {info}{extra}")
+    else:
+        await message.answer(f"❌ Не удалось переключить OCR: {info}")
 
 
 @router.message(StateFilter(BackgroundUpload.waiting_for_background), F.photo)
@@ -514,16 +541,22 @@ async def process_pdf(pdf_bytes: bytes, message: Message, processing_msg: Messag
     # Обновляем статус
     await processing_msg.edit_text("🔍 Извлекаю текст из PDF...")
 
-    # Извлекаем текст через Datalab API
-    extracted_text = await datalab_service.extract_text_from_image(
+    # Извлекаем текст через выбранный OCR провайдер
+    extracted_text = await ocr_service.extract_text(
         pdf_bytes, filename=filename, is_pdf=True
     )
 
     if not extracted_text or not extracted_text.strip():
-        await processing_msg.edit_text(
-            "❌ Не удалось извлечь текст из PDF. "
-            "Попробуйте загрузить PDF с читаемым текстом."
-        )
+        if ocr_service.provider == "paddle":
+            await processing_msg.edit_text(
+                "❌ PaddleOCR не поддерживает PDF напрямую. "
+                "Преобразуйте файл в изображения и отправьте их."
+            )
+        else:
+            await processing_msg.edit_text(
+                "❌ Не удалось извлечь текст из PDF. "
+                "Попробуйте загрузить PDF с читаемым текстом."
+            )
         return
 
     logger.info(f"Текст извлечен успешно, длина: {len(extracted_text)} символов")

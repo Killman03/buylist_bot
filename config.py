@@ -10,6 +10,10 @@ load_dotenv()
 # Telegram Bot Token (получить у @BotFather)
 BOT_TOKEN: Optional[str] = os.getenv("BOT_TOKEN")
 
+# OCR провайдер: datalab (по умолчанию) или paddle
+OCR_PROVIDER: str = os.getenv("OCR_PROVIDER", "datalab").lower()
+PADDLE_OCR_LANG: str = os.getenv("PADDLE_OCR_LANG", "ru")
+
 # Datalab API Key (получить на https://datalab.to)
 DATALAB_API_KEY: Optional[str] = os.getenv("DATALAB_API_KEY")
 
@@ -26,6 +30,9 @@ MAX_POLLS: int = 300  # максимум попыток проверки ста�
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не установлен. Установите переменную окружения BOT_TOKEN.")
 
-if not DATALAB_API_KEY:
+if OCR_PROVIDER not in {"datalab", "paddle"}:
+    raise ValueError("OCR_PROVIDER должен быть 'datalab' или 'paddle'.")
+
+if OCR_PROVIDER == "datalab" and not DATALAB_API_KEY:
     raise ValueError("DATALAB_API_KEY не установлен. Установите переменную окружения DATALAB_API_KEY.")
 
